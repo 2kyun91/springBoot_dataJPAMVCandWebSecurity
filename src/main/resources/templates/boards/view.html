@@ -1,0 +1,261 @@
+<html class="no-js" lang="" xmlns:th="http://www.thymeleaf.org"
+	xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+	xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity5"
+	layout:decorate="~{/layout/layout1}">
+	
+<div layout:fragment="content">
+	<!-- 
+		CSRF 토큰이 만들어지기 전에 ${_csrf}를 지정해서 사용하면 에러 발생하며 illegalStateException 메시지가 출력된다.
+		이를 해결하는 가장 간단한 방법은 페이지에 아래 <form> 태그와 같이 CSRF 토큰이 처리되도록 의미 없는 태그를 하나 추가주면 되고.
+		Thymeleaf의 th:action을 처리하기 위해서는 반드시 CSRF 값을 생성해 내기 때문에  이런 경우에 유용하다.
+		
+		아래 태그 없이 책의 내용처럼 댓글 추가,수정,삭제 작업이 가능한지 확인해볼것...
+	-->
+	<!-- <form th:action="${'/login'}"></form> -->
+	
+	<div class="panel-heading">View Page</div>
+	<div class="panel-body">
+		<div class="form-group">
+			<label>글 번호</label>
+			<input class="form-control" name="bno" th:value="${vo.bno}" readonly="readonly">
+		</div>
+		
+		<div class="form-group">
+			<label>글 제목</label>
+			<input class="form-control" name="title" th:value="${vo.title}" readonly="readonly">
+			<p class="help-block">제목을 입력해주세요.</p>
+		</div>
+		
+		<div class="form-group">
+			<label>글 내용</label>
+			<textarea rows="3" class="form-control" name="content" th:text="${vo.content}" readonly="readonly"></textarea>
+		</div>
+		
+		<div class="form-group">
+			<label>작성자</label>
+			<input class="form-control" name="writer" th:value="${vo.writer}" readonly="readonly">
+		</div>
+		
+		<div class="form-group">
+			<label>작성일</label>
+			<input class="form-control" name="regDate" th:value="${#dates.format(vo.regdate, 'yyyy-MM-dd')}" readonly="readonly">
+		</div>
+		
+		<!-- 
+			Thymeleaf의 링크 처리에는 (키 = 값)의 형태로 파라미터를 연결해서 링크를 생설할 수 있다.
+			th:if로 버튼 숨김/보임 처리를 할 수 있다.
+			스크립트를 이용해서 처리하고 싶은 경우 th:if 부분을 삭제한다.  
+		-->
+		<div class="pull-right" th:with="uId = ${#authentication.principal} eq 'anonymousUser' ? 'Guest' : ${#authentication.principal.member.uId}">
+			<!-- <a th:if="${uId} eq ${vo.writer}" th:href="@{modify(page=${pageVO.page}, size=${pageVO.size}, type=${pageVO.type}, keyword=${pageVO.keyword}, bno=${vo.bno})}" class="btn btn-default" id="goModBtn">수정/삭제</a> -->
+			<a th:href="@{modify(page=${pageVO.page}, size=${pageVO.size}, type=${pageVO.type}, keyword=${pageVO.keyword}, bno=${vo.bno})}" class="btn btn-default" id="goModBtn">수정/삭제</a>
+			<a th:href="@{list(page=${pageVO.page}, size=${pageVO.size}, type=${pageVO.type}, keyword=${pageVO.keyword}, bno=${vo.bno})}" class="btn btn-primary">목록</a>
+		</div>
+		
+		<div class="container">
+			<table class="table table-striped table-bordered table-hover">
+				<thead>
+					<tr>
+						<th>댓글 번호</th>
+						<th>댓글 내용</th>
+						<th>댓글 작성자</th>
+						<th>댓글 작성일</th>
+					</tr>
+				</thead>
+				<tbody id="replyTable"></tbody>
+			</table>
+			
+			<div class="pull-right">
+				<button class="btn" id="addReplyBtn">댓글작성</button>
+			</div>
+		</div>
+		
+		<div id="myModal" class="modal fade" role="dialog">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal">&times;</button>
+						<h4 class="modal-title">Modal Header</h4>
+					</div>
+					<div class="modal-body">
+						<label>댓글 내용</label>
+						<textarea rows="3" class="form-control" name="replyText"></textarea>
+						
+						<br>
+						
+						<label>댓글 작성자</label>
+						<input type="text" class="form-control" name="replyer" readonly="readonly">
+					</div>
+					<div class="modal-footer">
+						<button id="saveModalBtn" class="btn btn-info">저장</button>
+						<button id="delModalBtn" class="btn btn-danger">삭제</button>
+						<button type="button"class="btn btn-default" data-dismiss="modal">취소</button>
+					</div>
+				</div>			
+			</div>		
+		</div>
+	</div>
+</div>
+
+<th:block layout:fragment="script">
+	<!-- 
+		- 외부 js 파일 호출
+		- 게시물의 조회 화면에서는 Ajax를 이용해서 데이터를 처리해야 하므로 모듈로 만들어(모듈 패턴) 이용하는것이 좋다. 
+	-->
+	<script th:inline="javascript" th:src="@{'/js/reply.js'}"></script> 
+	<script th:inline="javascript">
+		$(document).ready(function(e) {
+			// 즉시 실행 함수.
+			(function() {
+				// 댓글 호출
+				replyManager.getAll([[${vo.bno}]], printList);
+			})();
+			
+			initEvent(); // 이벤트 호출
+		});
+		
+		var mode;
+		var bno = [[${vo.bno}]];
+		var rno;
+		var replyTextObj = $("textarea[name='replyText']");
+		var replyerObj = $("input[name='replyer']");
+		
+		var uId = [[${#authentication.principal} eq 'anonymousUser' ? null : ${#authentication.principal.member.uId}]];
+		/*
+		 * [주의!!!] "" 쌍따옴표로 감싸면 안된다. 
+		 * var csrf = JSON.parse('{"token":"fb790e55-6d4d-4c3f-939b-97f9cc3ebe12","parameterName":"_csrf","headerName":"X-CSRF-TOKEN"}');
+		*/ 
+		var csrf = JSON.parse('[[${_csrf}]]');
+		
+		function initEvent() {
+			$("#addReplyBtn").on("click", function() {
+				if(uId == null) { // 로그인한 상태가 아닌 경우 로그인 페이지로 이동
+					if(confirm("로그인 하시겠습니까?")) {
+						self.location = [[@{/login}]];
+					}
+					return;
+				}
+				
+				replyerObj.val(uId);
+				
+				$("#myModal").modal("show");
+				$("#delModalBtn").hide();
+				$(".modal-title").text("댓글 작성");
+				
+				mode = "ADD";
+			});
+			
+			// 버튼 숨김/보임 처리
+			$("#goModBtn").click(function(e) {
+				e.preventDefault();
+				
+				if(uId == null) {
+					if(confirm("로그인하시겠습니까?")) {
+						//self.location = [[@{/login}];
+						self.location = $(this).attr("href");
+					}
+				} else {
+					if(uId == [[${vo.writer}]]) {
+						self.location = $(this).attr("href");
+					} else {
+						alert("작성자만이 수정이나 삭제할 수 있습니다.");
+					}
+				}
+			});
+			
+			$("#saveModalBtn").click(function() {
+				var replyText = replyTextObj.val();
+				var replyer = replyerObj.val();
+				
+				if (mode == 'ADD') {
+						
+					// 댓글의 데이터를 수집해서 객체로 만든다.
+					var obj = {
+							replyText : replyText,
+							replyer : replyer,
+							bno : bno
+					};
+					
+					replyManager.add(obj, function(list) {
+						alert("새 댓글이 추가되었습니다.");
+						afterAll(list);
+					});
+				} else if (mode == "MOD") {
+					var obj = {
+						replyText : replyText,
+						bno : bno,
+						rno : rno
+					};
+					
+					replyManager.update(obj, function(list) {
+						alert("댓글이 수정되었습니다.");
+						afterAll(list);
+					});
+				};
+			});
+			
+			$("#delModalBtn").on("click", function() {
+				var obj = {
+						bno : bno,
+						rno : rno
+				};
+				
+				replyManager.remove(obj, function(list) {
+					printList(list);
+					alert("댓글이 삭제되었습니다.");
+					$("#myModal").modal("hide");
+					replyTextObj.val("");
+					replyerObj.val("");
+				});
+			});
+			
+			$("#replyTable").on("click", "tr", function(e) {
+				var tds = $(this).find("td");
+				
+				rno = tds[0].innerHTML;
+				mode = "MOD";
+				
+				replyTextObj.val(tds[1].innerHTML);
+				replyerObj.val(tds[2].innerHTML);
+				
+				$("#myModal").modal("show");
+				$("#delModalBtn").show();
+				$(".modal-title").text("댓글 수정/삭제");
+			});
+		}
+		
+		// 공통 코드 분리
+		function afterAll(list) {
+			printList(list); // 현재 게시물의 모든 댓글을 조회
+			$("#myModal").modal("hide"); // 모달창 숨김
+			replyTextObj.val("");
+			replyerObj.val("");
+		}
+		
+		function printList(list) {
+			var str = "";
+			var replyObj;
+			for (var i = 0; i < list.length; i++) {
+				replyObj = list[i];
+				
+				str += "<tr>" +
+				"<td>" + replyObj.rno + "</td>" +
+				"<td>" + replyObj.replyText + "</td>" +
+				"<td>" + replyObj.replyer + "</td>" +
+				"<td>" + formatDate(replyObj.regdate) + "</td>" +
+				"</tr>"
+			}
+			$("#replyTable").html(str);
+		}
+		
+		function formatDate(timeValue) {
+			var date = new Date(timeValue);
+			return date.getFullYear() + 
+					'-' + (date.getMonth() + 1 >= 10 ? date.getMonth() + 1 : '0' + (date.getMonth() + 1)) +
+						'-' + date.getDate();
+		}
+		
+	</script>
+</th:block>
+
+</html>

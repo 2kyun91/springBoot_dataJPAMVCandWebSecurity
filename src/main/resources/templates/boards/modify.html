@@ -1,0 +1,77 @@
+<html class="no-js" lang="" xmlns:th="http://www.thymeleaf.org"
+	xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+	xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity5"
+	layout:decorate="~{/layout/layout1}">
+
+<div layout:fragment="content">
+
+	<div class="panel-heading">Modify Page</div>
+	<div class="panel-body">
+		<form id="form1" th:action="@{/}">
+			<!-- 
+				스프링 시큐리티를 이용해 POST 방식을 사용하는 경우 CSRF 파라미터가 반드시 필요하다.
+				직접 추가하기 싫은경우 <form>태그에 th:action을 지정해주면 자동으로  CSRF 파라미터가 설정된다. 
+			-->
+			<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+			<div class="form-group">
+				<label>글 번호</label>
+				<input class="form-control" name="bno" th:value="${vo.bno}" readonly="readonly">
+			</div>
+			
+			<div class="form-group">
+				<label>글 제목</label>
+				<input class="form-control" name="title" th:value="${vo.title}">
+				<p class="help-block">제목을 입력해주세요.</p>
+			</div>
+			
+			<div class="form-group">
+				<label>글 내용</label>
+				<textarea rows="3" class="form-control" name="content" th:text="${vo.content}"></textarea>
+			</div>
+			
+			<div class="form-group">
+				<label>작성자</label>
+				<input class="form-control" name="writer" th:value="${vo.writer}" readonly="readonly">
+			</div>
+			
+			<!-- 수정/삭제 등의 작업 후에 다시 원래 사용자가 보던 리스트 페이지로 이동하기 위해 <input> 태그를 작성한다. -->
+			<input type="hidden" name="page" th:value="${pageVO.page}">
+			<input type="hidden" name="size" th:value="${pageVO.size}">
+			<input type="hidden" name="type" th:value="${pageVO.type}">
+			<input type="hidden" name="keyword" th:value="${pageVO.keyword}">
+		</form>
+
+		<div class="form-group">
+			<label>작성일</label> 
+			<input class="form-control" name="regDate" th:value="${#dates.format(vo.regdate, 'yyyy-MM-dd')}" readonly="readonly">
+		</div>
+		
+		<div class="pull-right">
+			<a href="#" class="btn btn-warning modbtn">수정</a>
+			<a href="#" class="btn btn-danger delbtn">삭제</a>
+			<a th:href="@{list(page=${pageVO.page}, size=${pageVO.size}, type=${pageVO.type}, keyword=${pageVO.keyword}, bno=${vo.bno})}" class="btn btn-primary">목록</a>
+		</div>
+	</div>
+
+</div>
+
+<th:block layout:fragment="script">
+	<script th:inline="javascript">
+		$(document).ready(function() {
+			var formObj = $("#form1");
+			
+			$(".delbtn").click(function() {
+				formObj.attr("action", "delete");
+				formObj.attr("method", "post");
+				formObj.submit();				
+			});
+			
+			$(".modbtn").click(function() {
+				formObj.attr("action", "modify");
+				formObj.attr("method", "post");
+				formObj.submit();				
+			});
+		});
+	</script>
+</th:block>	
+</html>
