@@ -66,20 +66,24 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter{
 			 *  - Hash-based Token (default)
 			 *  - Persistent Token
 			 * 
-			 * CSRF 토큰을 생성하기 위해서 .and().csrf().csrfTokenRepository() 설정을 지정해주어야 한다.(view.html의 '[[${_csrf}]]')
-			 * 만약 CSRF 토큰이 만들어지기 전에 ${_csrf}를 지정해서 사용하면 에러 발생하며 illegalStateException 메시지가 출력된다.
+			 * CSRF 토큰을 생성해서 객체(변수)에 담아 유지하려는 경우 아래 2가지 설정 중 하나를 지정해주어야 한다.(view.html의 'var csrf') 
+			 *  - .and().csrf().csrfTokenRepository() 
+			 *  - .and().csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+			 *  
+			 * 만약 CSRF 토큰이 만들어지기 전에 ${_csrf}를 지정해서 사용하는 경우 에러가 발생하며 illegalStateException 메시지가 출력된다.
 			 * 책(스프링 시큐리티 4)에서는 이런 설정 없이 진행하는데 현재 버전(스프링 시큐리티 5)으로 업그레이드 되면서 바뀐것 같다.
+			 * 
+			 * CookieCsrfTokenRepository.withHttpOnlyFalse()는 스프링 시큐리티의 CSRF 설정이 기본적으로 토큰을 HTTP 전용 쿠키에 저장하는데 
+			 * JavaScript는 HTTP 전용 쿠키에 접근 할 수 없으므로 스프링에만 HTTP를 사용하지 않도록 설정한다.(앵귤러 Js + Spring Security에서 많이 사용된다.)
 			 * */
 			http.authorizeRequests().
 				 antMatchers("/boards/list").permitAll().
 				 antMatchers("/boards/register").
 				 hasAnyRole("BASIC", "MANAGER", "ADMIN")
-				 // 여기서부터 이어서
-				 // new HttpSessionCsrfTokenRepository() 와 CookieCsrfTokenRepository.withHttpOnlyFalse()의 차이점이 무엇인지 알아보자...
 				 .and().csrf().csrfTokenRepository(new HttpSessionCsrfTokenRepository());
 //				 .and().csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
 			
-			http.formLogin().loginPage("/login");
+			http.formLogin().loginPage("/login").successHandler(new LoginSeccessHandler()); // '/login' 처리 후에는 작성한 LoginSeccessHandler를 이용한다.
 			http.exceptionHandling().accessDeniedPage("/accessDenied"); // 접근 제한 페이지 설정.
 			http.logout().logoutUrl("/logout").invalidateHttpSession(true); // 로그아웃 페이지를 따로 설정하고 싶은 경우.
 			

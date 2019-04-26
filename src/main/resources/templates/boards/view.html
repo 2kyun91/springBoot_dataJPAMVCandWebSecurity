@@ -4,15 +4,6 @@
 	layout:decorate="~{/layout/layout1}">
 	
 <div layout:fragment="content">
-	<!-- 
-		CSRF 토큰이 만들어지기 전에 ${_csrf}를 지정해서 사용하면 에러 발생하며 illegalStateException 메시지가 출력된다.
-		이를 해결하는 가장 간단한 방법은 페이지에 아래 <form> 태그와 같이 CSRF 토큰이 처리되도록 의미 없는 태그를 하나 추가주면 되고.
-		Thymeleaf의 th:action을 처리하기 위해서는 반드시 CSRF 값을 생성해 내기 때문에  이런 경우에 유용하다.
-		
-		아래 태그 없이 책의 내용처럼 댓글 추가,수정,삭제 작업이 가능한지 확인해볼것...
-	-->
-	<!-- <form th:action="${'/login'}"></form> -->
-	
 	<div class="panel-heading">View Page</div>
 	<div class="panel-body">
 		<div class="form-group">
@@ -131,7 +122,8 @@
 			$("#addReplyBtn").on("click", function() {
 				if(uId == null) { // 로그인한 상태가 아닌 경우 로그인 페이지로 이동
 					if(confirm("로그인 하시겠습니까?")) {
-						self.location = [[@{/login}]];
+						// dest(키) 이름으로 현재 URL(값)을 담아 '/login'을 요청한다. 
+						self.location = [[@{/login}]] + "?dest=" + encodeURIComponent(self.location);  
 					}
 					return;
 				}
@@ -169,11 +161,12 @@
 				
 				if (mode == 'ADD') {
 						
-					// 댓글의 데이터를 수집해서 객체로 만든다.
+					// 댓글의 데이터와 csrf 객체를 수집해서 객체로 만든다.
 					var obj = {
 							replyText : replyText,
 							replyer : replyer,
-							bno : bno
+							bno : bno,
+							csrf : csrf
 					};
 					
 					replyManager.add(obj, function(list) {
@@ -184,7 +177,9 @@
 					var obj = {
 						replyText : replyText,
 						bno : bno,
-						rno : rno
+						rno : rno,
+						replyer : replyer,
+						csrf : csrf
 					};
 					
 					replyManager.update(obj, function(list) {
@@ -197,15 +192,13 @@
 			$("#delModalBtn").on("click", function() {
 				var obj = {
 						bno : bno,
-						rno : rno
+						rno : rno,
+						csrf : csrf
 				};
 				
 				replyManager.remove(obj, function(list) {
-					printList(list);
 					alert("댓글이 삭제되었습니다.");
-					$("#myModal").modal("hide");
-					replyTextObj.val("");
-					replyerObj.val("");
+					afterAll(list);
 				});
 			});
 			
@@ -221,6 +214,11 @@
 				$("#myModal").modal("show");
 				$("#delModalBtn").show();
 				$(".modal-title").text("댓글 수정/삭제");
+				
+				if(uId != tds[2].innerHTML.trim()) { // 본인이 작성한 댓글이 아닌경우 버튼 숨김
+					$("#delModalBtn").hide();
+					$("#modalBtn").hide();
+				}
 			});
 		}
 		
